@@ -15,6 +15,8 @@ import type {
   Hotel,
 } from '@/types'
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 export const authApi = {
   register: (body: { email: string; password: string; fullName: string }) =>
     postData<AuthResponse, typeof body>('/auth/register', body),
@@ -78,7 +80,7 @@ export const assistantApi = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
-    const res = await fetch('/api/assistant/chat', {
+    const res = await fetch(`${API_BASE}/assistant/chat`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
