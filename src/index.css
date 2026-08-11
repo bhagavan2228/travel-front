@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans", "Inter", system-ui, sans-serif;
+  --font-display: "Instrument Sans", "DM Sans", system-ui, sans-serif;
+  --color-brand-50: #fff1f2;
+  --color-brand-100: #ffe4e6;
+  --color-brand-200: #fecdd3;
+  --color-brand-300: #fda4af;
+  --color-brand-400: #fb7185;
+  --color-brand-500: #f43f5e;
+  --color-brand-600: #e11d48;
+  --color-brand-700: #be123c;
+  --color-brand-800: #9f1239;
+  --color-brand-900: #881337;
+  --color-surface-light: #f8fafc;
+  --color-surface-dark: #0c0f14;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans antialiased bg-surface-light text-slate-800 dark:bg-surface-dark dark:text-slate-200;
+  }
+}
+
+@layer utilities {
+  .gradient-rainbow {
+    @apply bg-gradient-to-r from-pink-500 via-amber-500 to-rose-500;
+  }
+  .gradient-sunset {
+    @apply bg-gradient-to-r from-pink-600 via-orange-500 to-amber-500;
+  }
+  .glass {
+    @apply bg-white/40 dark:bg-slate-950/45 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-lg shadow-slate-900/[0.02];
+  }
+  .glass-strong {
+    @apply bg-white/75 dark:bg-slate-900/65 backdrop-blur-2xl border border-white/30 dark:border-white/10 shadow-xl shadow-slate-900/[0.04];
+  }
+  .neu-soft {
+    box-shadow:
+      8px 8px 16px rgba(15, 23, 42, 0.06),
+      -8px -8px 16px rgba(255, 255, 255, 0.9);
+  }
+  .dark .neu-soft {
+    box-shadow:
+      8px 8px 16px rgba(0, 0, 0, 0.35),
+      -4px -4px 12px rgba(255, 255, 255, 0.03);
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-pink-600 via-orange-500 to-amber-500 dark:from-pink-400 dark:via-orange-400 dark:to-amber-300;
+  }
+  .mesh-bg {
+    background-image:
+      radial-gradient(at 20% 30%, rgba(219, 39, 119, 0.08) 0, transparent 50%),
+      radial-gradient(at 80% 20%, rgba(245, 158, 11, 0.08) 0, transparent 45%),
+      radial-gradient(at 50% 80%, rgba(244, 63, 94, 0.06) 0, transparent 50%);
+  }
+}
