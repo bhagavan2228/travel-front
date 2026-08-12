@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Calendar, Sparkles, Map } from 'lucide-react'
+import { ArrowLeft, Calendar, Sparkles, Map, MapPin, ImageOff } from 'lucide-react'
 import { RestaurantExplorer } from '@/components/travel/RestaurantExplorer'
 import { destinationApi } from '@/api/endpoints'
 import { useAuth } from '@/contexts/AuthContext'
@@ -8,6 +9,60 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ReviewsSection } from '@/components/reviews/ReviewsSection'
 import { MapView } from '@/components/travel/MapView'
+import { WeatherCard } from '@/components/travel/WeatherCard'
+
+function HeroImage({ src, alt }: { src?: string; alt: string }) {
+  const [hasError, setHasError] = useState(false)
+
+  if (!src || hasError) {
+    return (
+      <div className="w-full aspect-[21/9] bg-gradient-to-br from-brand-600 via-brand-500 to-indigo-600 flex flex-col items-center justify-center gap-3">
+        <ImageOff className="h-12 w-12 text-white/40" />
+        <span className="text-white/60 font-display text-lg">{alt}</span>
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full aspect-[21/9] object-cover"
+      onError={() => setHasError(true)}
+    />
+  )
+}
+
+/**
+ * Splits a long description into readable paragraphs.
+ * We split on sentence boundaries, grouping roughly 3-4 sentences per paragraph.
+ */
+function DescriptionRenderer({ text }: { text: string }) {
+  if (!text) return null
+
+  // Split into sentences
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean)
+
+  if (sentences.length <= 4) {
+    return <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{text}</p>
+  }
+
+  // Group into paragraphs of ~4 sentences
+  const paragraphs: string[] = []
+  for (let i = 0; i < sentences.length; i += 4) {
+    paragraphs.push(sentences.slice(i, i + 4).join(' '))
+  }
+
+  return (
+    <div className="space-y-4">
+      {paragraphs.map((para, i) => (
+        <p key={i} className="text-slate-600 dark:text-slate-400 leading-relaxed">
+          {para}
+        </p>
+      ))}
+    </div>
+  )
+}
 
 export function DestinationDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -58,19 +113,16 @@ export function DestinationDetailPage() {
         </Link>
 
         <div className="glass-strong rounded-3xl overflow-hidden mb-10">
-          {destination.imageUrl && (
-            <img
-              src={destination.imageUrl}
-              alt={destination.name}
-              className="w-full aspect-[21/9] object-cover"
-            />
-          )}
+          <HeroImage src={destination.imageUrl} alt={destination.name} />
           <div className="p-8">
             <h1 className="font-display text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white mb-2">
               {destination.name}
             </h1>
             <p className="text-slate-500 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span>{[destination.city, destination.state, destination.country].filter(Boolean).join(', ')}</span>
+              <span className="flex items-center gap-1">
+                <MapPin className="h-4 w-4 text-brand-500" />
+                {[destination.city, destination.state, destination.country].filter(Boolean).join(', ')}
+              </span>
               {destination.exploredCount !== undefined && (
                 <>
                   <span className="text-slate-300 dark:text-slate-700">•</span>
@@ -80,11 +132,27 @@ export function DestinationDetailPage() {
                 </>
               )}
             </p>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">{destination.description}</p>
+
+            <DescriptionRenderer text={destination.description} />
+
             {destination.bestSeason && (
-              <p className="mt-4 text-sm text-brand-700 dark:text-brand-300">
+              <p className="mt-4 text-sm text-brand-700 dark:text-brand-300 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4" />
                 Best season: {destination.bestSeason}
               </p>
+            )}
+
+            {destination.tags && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {destination.tags.split(',').map((tag) => tag.trim()).filter(Boolean).map((tag, i) => (
+                  <span
+                    key={i}
+                    className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2.5 py-1 rounded-full"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -108,6 +176,8 @@ export function DestinationDetailPage() {
             )}
           </ul>
         </section>
+
+        <WeatherCard destinationId={destId} />
 
         <section className="glass rounded-2xl p-6 mb-12">
           <h2 className="flex items-center gap-2 font-semibold text-lg mb-4">

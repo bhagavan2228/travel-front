@@ -30,13 +30,16 @@ export const destinationApi = {
   search: (q: string) => getData<Destination[]>(`/destinations/search?q=${encodeURIComponent(q)}`),
   getRestaurants: (id: number, page = 0) =>
     getData<PageResponse<Restaurant>>(`/destinations/${id}/restaurants?page=${page}`),
-  getMenu: (restaurantId: number, page = 0) =>
-    getData<PageResponse<MenuItem>>(`/restaurants/${restaurantId}/menu?page=${page}`),
   getEvents: (id: number) => getData<EventItem[]>(`/destinations/${id}/events`),
   getHotels: (id: number) => getData<Hotel[]>(`/destinations/${id}/hotels`),
   getReviews: (id: number) => getData<Review[]>(`/destinations/${id}/reviews`),
   createReview: (id: number, body: { rating: number; title: string; body: string }) =>
     postData<Review, typeof body>(`/destinations/${id}/reviews`, body),
+}
+
+export const weatherApi = {
+  getByDestination: (id: number) => getData<any>(`/weather/destination/${id}`),
+  getByTrip: (id: number) => getData<any>(`/weather/trip/${id}`),
 }
 
 export const commentApi = {

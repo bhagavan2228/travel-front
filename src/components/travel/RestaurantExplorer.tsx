@@ -1,25 +1,53 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Star, Clock, ChevronRight, Leaf, X, Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Star, MapPin, Globe, Loader2, UtensilsCrossed } from 'lucide-react'
 import { destinationApi } from '@/api/endpoints'
-import type { Restaurant, MenuItem } from '@/types'
+import type { Restaurant } from '@/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 
 const PAGE_SIZE = 15
 
+function RestaurantImage({ src, alt, cuisine }: { src?: string; alt: string; cuisine?: string }) {
+  const [hasError, setHasError] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  if (!src || hasError) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-brand-100 to-brand-50 dark:from-brand-900/30 dark:to-slate-800 flex flex-col items-center justify-center gap-2">
+        <UtensilsCrossed className="h-8 w-8 text-brand-400 dark:text-brand-500" />
+        <span className="text-xs text-brand-500 dark:text-brand-400 font-medium">{cuisine || alt}</span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {!loaded && (
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={cn("w-full h-full object-cover transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => setHasError(true)}
+      />
+    </>
+  )
+}
+
 export function RestaurantExplorer({ destinationId }: { destinationId: number }) {
   const [restaurantPage, setRestaurantPage] = useState(0)
   const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([])
-  const [selected, setSelected] = useState<Restaurant | null>(null)
-  const [menuPage, setMenuPage] = useState(0)
-  const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>([])
 
   useEffect(() => {
     setRestaurantPage(0)
     setAllRestaurants([])
-    closeRestaurant()
   }, [destinationId])
 
   const { data: restaurantData, isLoading: loadingRestaurants, isFetching } = useQuery({
@@ -36,46 +64,19 @@ export function RestaurantExplorer({ destinationId }: { destinationId: number })
     }
   }, [restaurantData, restaurantPage])
 
-  const { data: menuData, isLoading: loadingMenu, isFetching: fetchingMenu } = useQuery({
-    queryKey: ['menu', selected?.id, menuPage],
-    queryFn: () => destinationApi.getMenu(selected!.id, menuPage),
-    enabled: !!selected,
-  })
-
-  useEffect(() => {
-    if (!menuData) return
-    if (menuPage === 0) {
-      setTimeout(() => setAllMenuItems(menuData.content), 0)
-    } else {
-      setTimeout(() => setAllMenuItems((prev) => [...prev, ...menuData.content]), 0)
-    }
-  }, [menuData, menuPage])
-
-  function closeRestaurant() {
-    setSelected(null)
-    setMenuPage(0)
-    setAllMenuItems([])
-  }
-
-  const openRestaurant = (r: Restaurant) => {
-    setSelected(r)
-    setMenuPage(0)
-    setAllMenuItems([])
-  }
-
   const hasMoreRestaurants =
     restaurantData != null && restaurantData.page + 1 < restaurantData.totalPages
-  const hasMoreMenu = menuData != null && menuData.page + 1 < menuData.totalPages
 
   return (
     <section className="glass rounded-2xl p-6 sm:p-8">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
-          <h2 className="font-semibold text-xl text-slate-900 dark:text-white">
+          <h2 className="font-semibold text-xl text-slate-900 dark:text-white flex items-center gap-2">
+            <UtensilsCrossed className="h-5 w-5 text-brand-600" />
             Top restaurants
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            Swiggy-style picks — tap a restaurant to see dishes
+            Real recommendations powered by AI
           </p>
         </div>
         {restaurantData && (
@@ -89,52 +90,92 @@ export function RestaurantExplorer({ destinationId }: { destinationId: number })
         <div className="flex justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
         </div>
+      ) : allRestaurants.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          No restaurants found for this location.
+        </div>
       ) : (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {allRestaurants.map((r, i) => (
-              <motion.button
-                key={r.id}
-                type="button"
+              <motion.div
+                key={`${r.id}-${i}`}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: (i % PAGE_SIZE) * 0.03 }}
-                onClick={() => openRestaurant(r)}
                 className={cn(
                   'text-left glass rounded-xl overflow-hidden transition-all duration-200',
-                  'hover:shadow-lg hover:-translate-y-0.5 hover:ring-2 hover:ring-brand-500/20',
-                  selected?.id === r.id && 'ring-2 ring-brand-600'
+                  'hover:shadow-lg hover:-translate-y-0.5 hover:ring-2 hover:ring-brand-500/20 flex flex-col'
                 )}
               >
                 <div className="aspect-[16/9] overflow-hidden relative">
-                  <img
-                    src={r.imageUrl}
-                    alt={r.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                  <span className="absolute top-2 left-2 bg-white/90 dark:bg-slate-900/90 text-xs font-semibold px-2 py-0.5 rounded-md">
-                    #{r.id <= 15 ? i + 1 : (restaurantPage * PAGE_SIZE) + i + 1}
+                  <RestaurantImage src={r.imageUrl} alt={r.name} cuisine={r.cuisine} />
+                  <span className="absolute top-2 left-2 bg-white/90 dark:bg-slate-900/90 text-xs font-semibold px-2 py-0.5 rounded-md shadow-sm">
+                    #{i + 1}
                   </span>
+                  {r.businessStatus && r.businessStatus !== 'OPERATIONAL' && (
+                    <span className="absolute top-2 right-2 bg-red-500/90 text-white text-xs font-semibold px-2 py-0.5 rounded-md">
+                      {r.businessStatus.replace('_', ' ')}
+                    </span>
+                  )}
                 </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-slate-900 dark:text-white truncate">
-                    {r.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{r.cuisine}</p>
-                  <div className="flex items-center justify-between mt-3 text-xs">
+                <div className="p-4 flex flex-col flex-grow">
+                  <div className="flex justify-between items-start gap-2">
+                    <h3 className="font-semibold text-slate-900 dark:text-white line-clamp-1">
+                      {r.name}
+                    </h3>
+                  </div>
+                  
+                  {r.address && (
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-1 flex items-center gap-1">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      {r.address}
+                    </p>
+                  )}
+                  
+                  {r.cuisine && <p className="text-xs text-slate-500 mt-1">{r.cuisine}</p>}
+                  
+                  <div className="flex items-center justify-between mt-3 text-xs mb-3">
                     <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
                       <Star className="h-3.5 w-3.5 fill-current" />
-                      {r.rating?.toFixed(1)}
+                      {r.rating ? r.rating.toFixed(1) : 'New'} 
+                      <span className="text-slate-400 ml-1">
+                        ({r.userRatingsTotal ? r.userRatingsTotal.toLocaleString() : 0})
+                      </span>
                     </span>
-                    <span className="flex items-center gap-1 text-slate-500">
-                      <Clock className="h-3.5 w-3.5" />
-                      {r.deliveryMinutes} min
-                    </span>
-                    <span className="text-slate-500">₹{r.costForTwo} for two</span>
+                    {r.priceLevel && r.priceLevel !== 'PRICE_LEVEL_UNSPECIFIED' && (
+                      <span className="text-green-600 dark:text-green-400 font-medium">
+                        {r.priceLevel.replace('PRICE_LEVEL_', '').replace('INEXPENSIVE', '$').replace('MODERATE', '$$').replace('EXPENSIVE', '$$$').replace('VERY_EXPENSIVE', '$$$$')}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="mt-auto pt-3 border-t border-slate-100 dark:border-slate-800 flex gap-2">
+                    {r.googleMapsUri && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs h-8"
+                        onClick={() => window.open(r.googleMapsUri, '_blank')}
+                      >
+                        <MapPin className="h-3 w-3 mr-1" />
+                        Maps
+                      </Button>
+                    )}
+                    {r.website && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs h-8"
+                        onClick={() => window.open(r.website, '_blank')}
+                      >
+                        <Globe className="h-3 w-3 mr-1" />
+                        Website
+                      </Button>
+                    )}
                   </div>
                 </div>
-              </motion.button>
+              </motion.div>
             ))}
           </div>
 
@@ -151,101 +192,6 @@ export function RestaurantExplorer({ destinationId }: { destinationId: number })
           )}
         </>
       )}
-
-      <AnimatePresence>
-        {selected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm"
-            onClick={closeRestaurant}
-          >
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="glass-strong w-full sm:max-w-lg max-h-[85vh] rounded-t-3xl sm:rounded-2xl overflow-hidden flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-              role="dialog"
-              aria-label={`Menu for ${selected.name}`}
-            >
-              <div className="flex items-start justify-between p-5 border-b border-slate-200/50 dark:border-white/10">
-                <div>
-                  <h3 className="font-semibold text-lg text-slate-900 dark:text-white">
-                    {selected.name}
-                  </h3>
-                  <p className="text-sm text-slate-500">{selected.cuisine} · Top dishes</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeRestaurant}
-                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10"
-                  aria-label="Close menu"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {loadingMenu && menuPage === 0 ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
-                  </div>
-                ) : (
-                  allMenuItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
-                    >
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="w-20 h-20 rounded-lg object-cover shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start gap-2">
-                          <p className="font-medium text-slate-900 dark:text-white text-sm">
-                            {item.name}
-                          </p>
-                          {item.veg && (
-                            <Leaf className="h-3.5 w-3.5 text-green-600 shrink-0" aria-label="Vegetarian" />
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{item.description}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="font-semibold text-sm text-slate-900 dark:text-white">
-                            ₹{item.price}
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-amber-700">
-                            <Star className="h-3 w-3 fill-current" />
-                            {item.rating?.toFixed(1)}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 self-center" />
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {hasMoreMenu && (
-                <div className="p-4 border-t border-slate-200/50 dark:border-white/10">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setMenuPage((p) => p + 1)}
-                    disabled={fetchingMenu}
-                  >
-                    {fetchingMenu ? 'Loading...' : `Load next ${PAGE_SIZE} dishes`}
-                  </Button>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </section>
   )
 }

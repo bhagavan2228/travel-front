@@ -64,23 +64,17 @@ export interface Restaurant {
   id: number
   destinationId: number
   name: string
+  googlePlaceId: string
   cuisine: string
   rating: number
-  deliveryMinutes: number
-  costForTwo: number
-  imageUrl?: string
-  menuItemCount: number
-}
-
-export interface MenuItem {
-  id: number
-  restaurantId: number
-  name: string
-  description: string
-  price: number
-  rating: number
-  veg: boolean
-  category: string
+  userRatingsTotal: number
+  address: string
+  latitude: number
+  longitude: number
+  priceLevel: string
+  website: string
+  googleMapsUri: string
+  businessStatus: string
   imageUrl?: string
 }
 
