@@ -53,7 +53,7 @@ export function AssistantChat() {
     }
 
     try {
-      const token = localStorage.getItem('access_token') || undefined
+      const token = localStorage.getItem('accessToken') || undefined
       const stream = await assistantApi.chatStream({ message: text, sessionId, destinationId }, token)
       
       if (!stream) {

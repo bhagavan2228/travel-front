@@ -23,8 +23,17 @@ export function BookingPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    // Simulated search
-    console.log('Searching', { type: activeTab, from, to, date, passengers })
+    if (!isAuthenticated) {
+      window.location.href = '/login'
+      return
+    }
+    const params = new URLSearchParams({
+      new: 'true',
+      to,
+      date,
+      tab: activeTab.toUpperCase()
+    })
+    window.location.href = `/trips?${params.toString()}`
   }
 
   return (

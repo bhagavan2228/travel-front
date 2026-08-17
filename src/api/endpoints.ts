@@ -111,3 +111,23 @@ export const bookingApi = {
     details?: string
   }) => postData<Booking, typeof body>('/bookings', body),
 }
+
+export const flightApi = {
+  search: (origin: string, destination: string, date: string, passengers: number) =>
+    getData<any>(`/flights/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}&passengers=${passengers}`),
+}
+
+export const hotelSearchApi = {
+  search: (cityCode: string, checkIn: string, checkOut: string, adults: number) =>
+    getData<any>(`/hotels/search?cityCode=${encodeURIComponent(cityCode)}&checkIn=${encodeURIComponent(checkIn)}&checkOut=${encodeURIComponent(checkOut)}&adults=${adults}`),
+}
+
+export const trainSearchApi = {
+  search: (origin: string, destination: string, date: string) =>
+    getData<any>(`/trains/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}`),
+}
+
+export const carSearchApi = {
+  search: (location: string, pickupDate: string, dropoffDate: string) =>
+    getData<any>(`/cars/search?location=${encodeURIComponent(location)}&pickupDate=${encodeURIComponent(pickupDate)}&dropoffDate=${encodeURIComponent(dropoffDate)}`),
+}

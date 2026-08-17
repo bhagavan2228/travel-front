@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Trash2,
@@ -14,7 +14,7 @@ import {
   Search,
   Star
 } from 'lucide-react'
-import { tripApi, destinationApi, bookingApi } from '@/api/endpoints'
+import { tripApi, destinationApi, bookingApi, flightApi, hotelSearchApi, trainSearchApi, carSearchApi } from '@/api/endpoints'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -165,7 +165,7 @@ interface TripBookingPortalProps {
 
 function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDate }: TripBookingPortalProps) {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'HOTEL' | 'FLIGHT' | 'TRAIN'>('HOTEL')
+  const [activeTab, setActiveTab] = useState<'HOTEL' | 'FLIGHT' | 'TRAIN' | 'CAR'>('HOTEL')
 
   // Search parameters states
   const [sourceCity, setSourceCity] = useState('Hyderabad')
@@ -176,6 +176,7 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
   const [hotels, setHotels] = useState<ReturnType<typeof generateHotels>>([])
   const [flights, setFlights] = useState<ReturnType<typeof generateFlights>>([])
   const [trains, setTrains] = useState<ReturnType<typeof generateTrains>>([])
+  const [cars, setCars] = useState<any[]>([])
 
   // Live selected train class for booking
   const [selectedTrainClasses, setSelectedTrainClasses] = useState<{ [trainNo: string]: string }>({})
@@ -191,25 +192,78 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
     enabled: !!destinationId && activeTab === 'HOTEL'
   })
 
-  // Automatically trigger search when parameters change
+  // Automatically trigger search when parameters change (debounced)
   useEffect(() => {
     if (activeTab === 'HOTEL') {
-      const h = generateHotels(destCity || destinationName || 'Warangal')
-      setTimeout(() => setHotels(h), 0)
+      const timeoutId = setTimeout(() => {
+        handleHotelSearch()
+      }, 500)
+      return () => clearTimeout(timeoutId)
     }
   }, [destCity, destinationName, activeTab])
 
-  const fallbackHotels = hotels
-  const displayHotels = serverHotels && serverHotels.length > 0 ? serverHotels : fallbackHotels
+  const displayHotels = hotels && hotels.length > 0 ? hotels : (serverHotels && serverHotels.length > 0 ? serverHotels : [])
 
-  const handleFlightSearch = (e: React.FormEvent) => {
+  const handleFlightSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFlights(generateFlights(sourceCity, destCity, travelDate))
+    try {
+      const data = await flightApi.search(sourceCity, destCity, travelDate, 1)
+      setFlights(data.flights || [])
+    } catch (err) {
+      console.error(err)
+      setFlights(generateFlights(sourceCity, destCity, travelDate))
+    }
   }
 
-  const handleTrainSearch = (e: React.FormEvent) => {
+  const handleHotelSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    try {
+      const checkoutDate = travelDate ? new Date(new Date(travelDate).getTime() + 86400000 * 5).toISOString().split('T')[0] : '';
+      const data = await hotelSearchApi.search(destCity.substring(0, 3).toUpperCase() || 'PAR', travelDate, checkoutDate, 1)
+      setHotels(data.hotels || [])
+    } catch (err) {
+      console.error(err)
+      setHotels(generateHotels(destCity || destinationName || 'Warangal'))
+    }
+  }
+
+  const handleTrainSearch = async (e: React.FormEvent) => {
     e.preventDefault()
-    setTrains(generateTrains(sourceCity, destCity, travelDate))
+    try {
+      const data = await trainSearchApi.search(sourceCity, destCity, travelDate)
+      
+      const mappedTrains = (data.trains || []).map((t: any) => {
+        const basePrice = Math.floor((parseInt(t.distance) || 1000) * 0.5)
+        return {
+          number: t.trainNo,
+          name: t.trainName,
+          depTime: t.fromTime,
+          arrTime: t.toTime,
+          status: 'Scheduled',
+          classes: [
+            { name: "SL", price: basePrice, vacancies: "Available - 120" },
+            { name: "3A", price: basePrice * 3, vacancies: "Available - 45" },
+            { name: "2A", price: basePrice * 4.5, vacancies: "WL - 12" }
+          ]
+        }
+      })
+      setTrains(mappedTrains)
+    } catch (err) {
+      console.error(err)
+      setTrains(generateTrains(sourceCity, destCity, travelDate))
+    }
+  }
+
+  const handleCarSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const data = await carSearchApi.search(destCity.substring(0, 3).toUpperCase() || 'LHR', travelDate, travelDate)
+      setCars(data.cars || [])
+    } catch (err) {
+      console.error(err)
+      // fallback to empty if error
+      setCars([])
+    }
   }
 
   const { data: bookings, isLoading } = useQuery({
@@ -319,8 +373,8 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
         </div>
 
         {/* Tab Selector */}
-        <div className="grid grid-cols-3 gap-2">
-          {(['HOTEL', 'FLIGHT', 'TRAIN'] as const).map((type) => (
+        <div className="grid grid-cols-4 gap-2">
+          {(['HOTEL', 'FLIGHT', 'TRAIN', 'CAR'] as const).map((type) => (
             <button
               key={type}
               type="button"
@@ -355,27 +409,21 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[360px] overflow-y-auto pr-1">
               {displayHotels.map((h: any) => {
-                const isFull = h.vacancies === 0
+                const isFull = false; // Live APIs will only return available rooms, mostly
+                const imageUrl = h.photoUrl || h.imageUrl || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80'
+                const rating = h.rating || 4.0;
+                
                 return (
                   <div
-                    key={h.id}
+                    key={h.hotelId || h.id}
                     className="glass rounded-xl overflow-hidden flex flex-col border border-white/20 dark:border-white/5 shadow-sm"
                   >
                     <div className="relative h-28 w-full bg-slate-100 dark:bg-slate-800">
                       <img
-                        src={h.imageUrl}
+                        src={imageUrl}
                         alt={h.name}
                         className="h-full w-full object-cover"
                       />
-                      <span
-                        className={`absolute top-2.5 right-2.5 text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ${
-                          isFull
-                            ? 'bg-red-500 text-white'
-                            : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white'
-                        }`}
-                      >
-                        {isFull ? 'Sold Out' : `${h.vacancies} Rooms Left`}
-                      </span>
                     </div>
 
                     <div className="p-3 flex-1 flex flex-col justify-between">
@@ -386,20 +434,17 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
                           </h6>
                           <div className="flex items-center gap-0.5 shrink-0 bg-amber-500/10 text-amber-600 px-1 rounded text-[10px] font-bold">
                             <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
-                            {h.rating}
+                            {rating}
                           </div>
                         </div>
 
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mb-2">
-                          ₹{h.price} / night
+                          {h.priceFormatted || `₹${h.price}`} / night
                         </p>
 
                         <div className="border-t border-slate-100 dark:border-white/5 pt-2 space-y-1">
                           <p className="text-[9px] text-slate-400 italic line-clamp-1">
-                            "{h.reviews[0]}"
-                          </p>
-                          <p className="text-[9px] text-slate-400 italic line-clamp-1">
-                            "{h.reviews[1]}"
+                            {h.roomType || h.address}
                           </p>
                         </div>
                       </div>
@@ -413,7 +458,7 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
                             type: 'HOTEL',
                             provider: h.name,
                             price: h.price,
-                            details: `Rating: ${h.rating}⭐ | Rooms Left: ${h.vacancies}`,
+                            details: `Room: ${h.roomType || 'Standard'} | ${h.boardType || 'ROOM ONLY'}`,
                           })
                         }
                       >
@@ -489,14 +534,14 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-500 mt-0.5">
-                        Schedule: {f.depTime} – {f.arrTime} • {f.vacancies} seats left
+                        Schedule: {f.departureTime || f.depTime} – {f.arrivalTime || f.arrTime} • {f.duration}
                       </p>
                     </div>
                   </div>
 
                   <div className="text-right flex items-center gap-3">
                     <div>
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">₹{f.price}</p>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">{f.priceFormatted || `₹${f.price}`}</p>
                     </div>
                     <Button
                       size="sm"
@@ -505,7 +550,7 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
                           type: 'FLIGHT',
                           provider: `${f.airline} (${f.flightNum})`,
                           price: f.price,
-                          details: `Flight: ${f.depTime}-${f.arrTime} | Seat: Confirmed`,
+                          details: `Flight: ${f.departureTime || f.depTime}-${f.arrivalTime || f.arrTime} | Seat: Confirmed`,
                         })
                       }
                       disabled={bookingMutation.isPending}
@@ -665,6 +710,104 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
             </div>
           </form>
         )}
+
+        {/* Dynamic Car Search */}
+        {activeTab === 'CAR' && (
+          <form onSubmit={handleCarSearch} className="space-y-4">
+            <div className="grid grid-cols-1 gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase">Pickup Location</label>
+                <input
+                  value={destCity}
+                  onChange={(e) => setDestCity(e.target.value)}
+                  placeholder="City or Airport Code"
+                  required
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/40 dark:bg-transparent px-3 py-2 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 items-end">
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase">Dates</label>
+                <input
+                  type="date"
+                  value={travelDate}
+                  onChange={(e) => setTravelDate(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/40 dark:bg-transparent px-3 py-2 text-xs"
+                />
+              </div>
+              <Button type="submit" size="sm" className="w-full gap-1">
+                <Search className="h-3.5 w-3.5" /> Find Cars
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[360px] overflow-y-auto pr-1">
+              {cars.map((c: any) => (
+                <div
+                  key={c.carId}
+                  className="glass p-3 rounded-2xl border border-white/20 dark:border-white/5 flex flex-col gap-3 group hover:border-amber-500/30 transition-all shadow-sm overflow-hidden relative"
+                >
+                  <div className="h-28 w-full rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
+                    <img
+                      src={c.imageUrl}
+                      alt={c.vehicleName}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg">
+                      {c.brand}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 leading-tight">
+                        {c.vehicleName}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-2">
+                        <span>{c.type}</span>
+                        <span>•</span>
+                        <span>{c.seats} Seats</span>
+                        <span>•</span>
+                        <span>{c.transmission}</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-end justify-between mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-medium">Price per day</p>
+                        <p className="text-lg font-black text-slate-900 dark:text-white leading-none">
+                          {c.priceFormatted}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="rounded-xl px-4 py-1.5 h-auto text-xs font-bold"
+                        onClick={() =>
+                          bookingMutation.mutate({
+                            type: 'CAR_RENTAL',
+                            provider: `${c.brand} - ${c.vehicleName}`,
+                            price: c.pricePerDay,
+                            details: `Type: ${c.type} | Seats: ${c.seats} | ${c.transmission}`,
+                          })
+                        }
+                        disabled={bookingMutation.isPending}
+                      >
+                        Book
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {cars.length === 0 && (
+                <div className="col-span-full text-center py-6">
+                  <p className="text-xs text-slate-500 italic">Enter location and search for cars.</p>
+                </div>
+              )}
+            </div>
+          </form>
+        )}
       </div>
     </div>
   )
@@ -673,8 +816,10 @@ function TripBookingPortal({ tripId, destinationId, destinationName, tripStartDa
 export function TripsPage() {
   const { isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [showForm, setShowForm] = useState(false)
   const [expandedTripId, setExpandedTripId] = useState<number | null>(null)
+  
   const [form, setForm] = useState({
     title: '',
     destinationId: '',
@@ -687,6 +832,28 @@ export function TripsPage() {
   const [destSearch, setDestSearch] = useState('')
   const [showDestDropdown, setShowDestDropdown] = useState(false)
   const [selectedDestName, setSelectedDestName] = useState('')
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setShowForm(true)
+      const to = searchParams.get('to')
+      const date = searchParams.get('date')
+      if (to) {
+        setDestSearch(to)
+        // Set title heuristically
+        setForm(f => ({ ...f, title: `Trip to ${to}` }))
+      }
+      if (date) {
+        setForm(f => ({
+          ...f,
+          startDate: date,
+          endDate: new Date(new Date(date).getTime() + 86400000 * 5).toISOString().split('T')[0]
+        }))
+      }
+      // Remove query params after reading
+      setSearchParams({})
+    }
+  }, [searchParams, setSearchParams])
 
   const { data: trips, isLoading } = useQuery({
     queryKey: ['trips'],
